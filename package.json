@@ -1,6 +1,6 @@
 {
   "name": "offline-plugin-patched",
-  "version": "4.8.1",
+  "version": "4.8.3",
   "description": "offline-plugin for webpack, patched for AppCache fixes",
   "main": "lib/index.js",
   "files": [
