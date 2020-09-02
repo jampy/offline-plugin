@@ -623,25 +623,32 @@ function WebpackServiceWorker(params, helpers) {
       mode: 'cors'
     };
 
+    let extracted = [];
+    let addAll = [];
+
     return Promise.all(requests.map((request) => {
+
       if (bustValue) {
         request = applyCacheBust(request, bustValue);
       }
 
-      return fetch(request, requestInit).then(fixRedirectedResponse);
-    })).then((responses) => {
-      if (responses.some(response => !response.ok)) {
-        return Promise.reject(new Error('Wrong response status'));
-      }
+      return fetch(request, requestInit)
+        .then(fixRedirectedResponse)
+        .then(response => {
 
-      let extracted = [];
-      let addAll = responses.map((response, i) => {
-        if (allowLoaders) {
-          extracted.push(extractAssetsWithLoaders(requests[i], response));
-        }
+          if (!response.ok) {
+            return Promise.reject(new Error('Wrong response status'));
+          }
 
-        return cache.put(requests[i], response);
-      });
+          if (allowLoaders) {
+            extracted.push(extractAssetsWithLoaders(request, response));
+          }
+
+          addAll.push(cache.put(request, response));
+
+        });
+
+    })).then(() => {
 
       if (extracted.length) {
         const newOptions = copyObject(options);
