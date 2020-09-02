@@ -10,7 +10,11 @@
     "runtime.d.ts"
   ],
   "scripts": {
-    "test": "node tests/legacy/run && eslint -c configs/eslint.tests.json 'tests/**/**.js'",
+    "test": "node tests/legacy/run && eslint -c configs/eslint.tests.json 'tests/legacy/**.js'",
+    "test:browser": "node tests/run-browser-tests.js",
+    "test:ci_fixtures": "npm run test",
+    "test:ci_browser": "npm install puppeteer@^0.12.0 && npm run test:browser",
+    "test:ci_all": "npm run test:ci_fixtures && npm run test:ci_browser",
     "build": "./node_modules/.bin/babel src/ -d lib/",
     "watch": "npm run build -- --watch",
     "install:build-deps": "node build/install.js",
@@ -20,9 +24,10 @@
     "release:latest:patch": "npm version patch && npm run tag && npm run publish:latest",
     "release:latest:minor": "npm version minor && npm run tag && npm run publish:latest",
     "release:latest:major": "npm version major && npm run tag && npm run publish:latest",
-    "release:next:patch": "npm version patch && npm run tag && npm run publish:next",
-    "release:next:minor": "npm version minor && npm run tag && npm run publish:next",
-    "release:next:major": "npm version major && npm run tag && npm run publish:next"
+    "release:next:patch": "npm --no-git-tag-version version prepatch && npm run publish:next",
+    "release:next:minor": "npm --no-git-tag-version version preminor && npm run publish:next",
+    "release:next:major": "npm --no-git-tag-version version premajor && npm run publish:next",
+    "release:next:update": "npm --no-git-tag-version version prerelease && npm run publish:next"
   },
   "collective": {
     "type": "opencollective",
@@ -31,7 +36,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jampy81/offline-plugin.git"
+    "url": "https://github.com/NekR/offline-plugin.git"
   },
   "author": "Arthur Stolyar <nekr.fabula@gmail.com>",
   "license": "MIT",
@@ -65,10 +70,14 @@
   "devDependencies": {
     "chalk": "^1.1.3",
     "cli-highlight": "^1.1.4",
+    "copy-webpack-plugin": "^4.2.0",
     "del": "^2.2.2",
     "diff": "^3.0.1",
     "dir-compare": "^1.1.0",
     "eslint": "^3.14.1",
+    "express": "^4.16.2",
+    "glob": "^7.1.2",
+    "mocha": "^4.0.1",
     "on-build-webpack": "^0.1.0",
     "webpack": "1.14.0"
   },

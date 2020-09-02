@@ -1,11 +1,17 @@
 import AppCache from './app-cache';
 import ServiceWorker from './service-worker';
+import defaultOptions from './default-options';
+
+import {
+  hasMagic, interpolateString,
+  isAbsoluteURL, escapeRegexp,
+  functionToString
+} from './misc/utils';
 
 import path from 'path';
 import url from 'url';
 import deepExtend from 'deep-extend';
 import minimatch from 'minimatch';
-import { hasMagic, interpolateString, isAbsoluteURL, escapeRegexp } from './misc/utils';
 import loaderUtils from 'loader-utils';
 import slash from 'slash';
 
@@ -14,67 +20,6 @@ const AUTO_UPDATE_INTERVAL = 3600000;
 
 const hasOwn = {}.hasOwnProperty;
 const updateStrategies = ['all', 'hash', 'changed'];
-const defaultOptions = {
-  caches: 'all',
-  publicPath: void 0,
-  updateStrategy: 'changed',
-  responseStrategy: 'cache-first',
-  externals: [],
-  excludes: ['**/.*', '**/*.map'],
-  // Hack to have intermediate value, e.g. default one, true and false
-  relativePaths: ':relativePaths:',
-  version: null,
-  autoUpdate: false,
-
-  rewrites(asset) {
-    return asset.replace(/^([\s\S]*?)index.htm(l?)$/, (match, dir) => {
-      if (isAbsoluteURL(match)) {
-        return match;
-      }
-
-      return dir || './';
-    });
-  },
-
-  cacheMaps: null,
-
-  ServiceWorker: {
-    output: 'sw.js',
-    entry: path.join(__dirname, '../tpls/empty-entry.js'),
-    scope: null,
-    events: false,
-    prefetchRequest: {
-      credentials: 'omit',
-      headers: void 0,
-      mode: 'cors',
-      cache: void 0
-    },
-    minify: null,
-    navigateFallbackForRedirects: true
-  },
-
-  AppCache: {
-    NETWORK: '*',
-    FALLBACK: null,
-    directory: 'appcache/',
-    caches: ['main'],
-    events: false,
-    disableInstall: false,
-    includeCrossOrigin: false
-  },
-
-  // Needed for testing
-  __tests: {
-    swMetadataOnly: false,
-    ignoreRuntime: false,
-    noVersionDump: false
-  },
-
-  // Not yet used
-  alwaysRevalidate: void 0,
-  preferOnline: void 0,
-  ignoreSearch: ['**'],
-};
 
 export default class OfflinePlugin {
   constructor(options) {
@@ -162,7 +107,22 @@ export default class OfflinePlugin {
       };
     }
 
-    this.cacheMaps = this.stringifyCacheMaps(this.options.cacheMaps);
+    if (this.options.appShell && typeof this.options.appShell === 'string') {
+      this.appShell = this.options.appShell;
+    }
+
+    let cacheMaps = this.options.cacheMaps;
+
+    if (this.appShell) {
+      // Make appShell the latest in the chain so it could be overridden
+      cacheMaps = (cacheMaps || []).concat({
+        match: new Function('return new URL(' +
+          JSON.stringify(this.appShell) + ', location);'),
+        requestTypes: ['navigate']
+      });
+    }
+
+    this.cacheMaps = this.stringifyCacheMaps(cacheMaps);
 
     this.REST_KEY = ':rest:';
     this.EXTERNALS_KEY = ':externals:';
@@ -278,12 +238,16 @@ export default class OfflinePlugin {
     });
 
     compiler.plugin('emit', (compilation, callback) => {
-      const runtimeTemplatePath = path.resolve(__dirname, '../tpls/runtime-template.js')
+      const runtimeTemplatePath = path.resolve(__dirname, '../tpls/runtime-template.js');
+      let hasRuntime = true;
 
-      if (
-        compilation.fileDependencies.indexOf(runtimeTemplatePath) === -1 &&
-        !this.__tests.ignoreRuntime
-      ) {
+      if (compilation.fileDependencies.indexOf) {
+        hasRuntime = compilation.fileDependencies.indexOf(runtimeTemplatePath) !== -1;
+      } else if (compilation.fileDependencies.has) {
+        hasRuntime = compilation.fileDependencies.has(runtimeTemplatePath);
+      }
+
+      if (!hasRuntime && !this.__tests.ignoreRuntime) {
         compilation.errors.push(
           new Error(`OfflinePlugin: Plugin's runtime wasn't added to one of your bundle entries. See this https://goo.gl/YwewYp for details.`)
         );
@@ -334,7 +298,7 @@ export default class OfflinePlugin {
         new Error(
           'OfflinePlugin: Cache sections `additional` and `optional` could be used ' +
           'only when each asset passed to it has unique name (e.g. hash or version in it) and ' +
-          'is permanently available for given URL. If you think that it\' your case, ' +
+          'is permanently available for given URL. If you think that it\'s your case, ' +
           'set `safeToUseOptionalCaches` option to `true`, to remove this warning.'
         )
       );
@@ -449,7 +413,7 @@ export default class OfflinePlugin {
 
             compilation.warnings.push(
               new Error(
-                `OfflinePlugin: Cache asset [${ cacheKey }] is not found in the output assets,` +
+                `OfflinePlugin: Cache asset [${ cacheKey }] is not found in the output assets, ` +
                 `if the asset is not processed by webpack, move it to the |externals| option to remove this warning.`
               )
             );
@@ -620,15 +584,22 @@ export default class OfflinePlugin {
       }
 
       let to;
+      let match;
 
       if (typeof map.to === 'function') {
-        to = map.to + '';
+        to = functionToString(map.to);
       } else {
         to = map.to ? JSON.stringify(map.to) : null;
       }
 
+      if (typeof map.match === 'function') {
+        match = functionToString(map.match)
+      } else {
+        match = map.match + '';
+      }
+
       return {
-        match: map.match + '',
+        match: match,
         to: to,
         requestTypes: map.requestTypes || null
       };
