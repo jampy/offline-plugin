@@ -628,6 +628,8 @@ function WebpackServiceWorker(params, helpers) {
 
     return Promise.all(requests.map((request) => {
 
+      const origRequest = request;
+
       if (bustValue) {
         request = applyCacheBust(request, bustValue);
       }
@@ -641,10 +643,10 @@ function WebpackServiceWorker(params, helpers) {
           }
 
           if (allowLoaders) {
-            extracted.push(extractAssetsWithLoaders(request, response));
+            extracted.push(extractAssetsWithLoaders(origRequest, response));
           }
 
-          addAll.push(cache.put(request, response));
+          addAll.push(cache.put(origRequest, response));
 
         });
 
